@@ -1,11 +1,12 @@
 package com.ablanco.zoomy;
 
+
 import android.graphics.Color;
 import android.graphics.Point;
 import android.graphics.PointF;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
-import android.view.ScaleGestureDetector;
+import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
@@ -32,10 +33,13 @@ class ZoomableTouchListener implements View.OnTouchListener, ScaleGestureDetecto
     private int mState = STATE_IDLE;
     private TargetContainer mTargetContainer;
     private View mTarget;
-    private ImageView mZoomableView;
+    private View mZoomableView;
     private View mShadow;
     private ScaleGestureDetector mScaleGestureDetector;
     private GestureDetector mGestureDetector;
+
+
+
     private GestureDetector.SimpleOnGestureListener mGestureListener =
             new GestureDetector.SimpleOnGestureListener() {
 
@@ -167,6 +171,7 @@ class ZoomableTouchListener implements View.OnTouchListener, ScaleGestureDetecto
 
         }
 
+
         return true;
     }
 
@@ -181,49 +186,59 @@ class ZoomableTouchListener implements View.OnTouchListener, ScaleGestureDetecto
                     .scaleY(1)
                     .setInterpolator(mEndZoomingInterpolator)
                     .withEndAction(mEndingZoomAction).start();
+
         } else mEndingZoomAction.run();
     }
 
 
     private void startZoomingView(View view) {
+      if (mTarget instanceof TextureView) {
+        mZoomableView = new TextureView(mTarget.getContext());
+        mZoomableView.setLayoutParams(new ViewGroup.LayoutParams(mTarget.getWidth(), mTarget.getHeight()));
+      } else {
         mZoomableView = new ImageView(mTarget.getContext());
         mZoomableView.setLayoutParams(new ViewGroup.LayoutParams(mTarget.getWidth(), mTarget.getHeight()));
-        mZoomableView.setImageBitmap(ViewUtils.getBitmapFromView(view));
+        ((ImageView)(mZoomableView)).setImageBitmap(ViewUtils.getBitmapFromView(view));
+      }
+      //show the view in the same coords
+      mTargetViewCords = ViewUtils.getViewAbsoluteCords(view);
 
-        //show the view in the same coords
-        mTargetViewCords = ViewUtils.getViewAbsoluteCords(view);
+      mZoomableView.setX(mTargetViewCords.x);
+      mZoomableView.setY(mTargetViewCords.y);
 
-        mZoomableView.setX(mTargetViewCords.x);
-        mZoomableView.setY(mTargetViewCords.y);
 
-        if (mShadow == null) mShadow = new View(mTarget.getContext());
-        mShadow.setBackgroundResource(0);
+      if (mShadow == null) mShadow = new View(mTarget.getContext());
+      mShadow.setBackgroundResource(0);
 
-        addToDecorView(mShadow);
-        addToDecorView(mZoomableView);
+      addToDecorView(mShadow);
+      addToDecorView(mZoomableView);
 
-        //trick for simulating the view is getting out of his parent
-        disableParentTouch(mTarget.getParent());
+      //trick for simulating the view is getting out of his parent
+      disableParentTouch(mTarget.getParent());
+      if (!(mTarget instanceof TextureView)) {
         mTarget.setVisibility(View.INVISIBLE);
+      }
 
-        if (mConfig.isImmersiveModeEnabled()) hideSystemUI();
-        if (mZoomListener != null) mZoomListener.onViewStartedZooming(mTarget);
+      if (mConfig.isImmersiveModeEnabled()) hideSystemUI();
+      if ((mTarget instanceof TextureView) && mZoomListener != null) {
+        mZoomListener.onViewStartedZooming(mZoomableView);
+      } else if (mZoomListener != null) {
+        mZoomListener.onViewStartedZooming(mTarget);
+      }
+
     }
 
 
     @Override
     public boolean onScale(ScaleGestureDetector detector) {
-        if (mZoomableView == null) return false;
+      if (mZoomableView == null) return false;
+      mScaleFactor *= detector.getScaleFactor();
+      mScaleFactor = Math.max(MIN_SCALE_FACTOR, Math.min(mScaleFactor, MAX_SCALE_FACTOR));
+      mZoomableView.setScaleX(mScaleFactor);
+      mZoomableView.setScaleY(mScaleFactor);
+      obscureDecorView(mScaleFactor);
 
-        mScaleFactor *= detector.getScaleFactor();
-
-        // Don't let the object get too large.
-        mScaleFactor = Math.max(MIN_SCALE_FACTOR, Math.min(mScaleFactor, MAX_SCALE_FACTOR));
-
-        mZoomableView.setScaleX(mScaleFactor);
-        mZoomableView.setScaleY(mScaleFactor);
-        obscureDecorView(mScaleFactor);
-        return true;
+      return true;
     }
 
     @Override
